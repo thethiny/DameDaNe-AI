@@ -28,7 +28,6 @@ class ChangelogAction(argparse.Action):
             print()
         sys.exit(0)
 
-
 parser = argparse.ArgumentParser(description="Generate video from image with audio support")
 input_group = parser.add_argument_group("Input", "Arguments for Video and Image Inputs")
 input_group.add_argument("-s", "--source", type=str, help="The Image to generate a video from", required=True)
@@ -66,8 +65,8 @@ args = parser.parse_args()
 
 
 import warnings
-from os import makedirs
-from os.path import basename, join, splitext, isfile
+from os import makedirs, listdir
+from os.path import basename, join, splitext, isfile, isdir
 from sys import argv
 
 import imageio
@@ -87,8 +86,17 @@ from moviepy.video.fx.all import resize as movie_resize
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.VideoClip import VideoClip
 
+def make_frame(t):
+            try:
+                x = predictions[int(len(predictions)/source_duration*t)]
+            except:
+                x = predictions[-1]
+
+            return (x*255).astype(np.uint8)
+
+generator, kp_detector = None, None
+
 output_folder = "output"
-#FFMPEG_BINARY_AAC = "ffmpeg-hi10-heaac.exe"
 FFMPEG_BINARY_AAC = "ffmpeg.exe"
 
 warnings.filterwarnings("ignore")
@@ -181,190 +189,191 @@ else:
     print("Generation Scale: Relative")
 print()
 
-source_image_path = args.source
-driving_video_path = args.video
-output_video_name, image_extension = basename(source_image_path).rsplit('.', 1)
-output_video_name += '_' + args.image_resize + '_' + args.video_resize
-if options['adapt_movement_scale']:
-    output_video_name += '_adaptive_scaling'
-output_video_name += "_" + args.codec
-output_video_name += ".mp4"
-driving_video_name = basename(driving_video_path).rsplit('.', 1)[0]
-output_folder = join(output_folder, driving_video_name)
-try:
-    makedirs(output_folder)
-except:
-    pass
-output_video_path = join(output_folder, output_video_name)
-
-print("Loading Model")
-generator, kp_detector = load_checkpoints(**modes[args.mode])
-print("Loading User Input")
-print()
-
-# Read Video and Extract Audio
-source_video = VideoFileClip(driving_video_path)
-# Remap timings
-if args.start:
-    if args.end and args.end > args.start and args.end < source_video.duration:
-            source_video = source_video.subclip(args.start, args.end)
-    elif args.duration and args.duration < source_video.duration and args.duration + args.start < source_video.duration:
-            source_video = source_video.subclip(args.start, args.start + args.duration)            
-    else:
-        if args.start < source_video.duration:
-            source_video = source_video.subclip(args.start)
-        else:
-            args.start = 0.00
+if isdir(args.source):
+    input_files = [join(args.source, file) for file in listdir(args.source) if isfile(join(args.source, file))]
+elif isfile(args.source):
+    input_files = [args.source]
 else:
-    if args.end and args.end < source_video.duration:
-        source_video = source_video.subclip(source_video.start, args.end)
-    elif args.duration and args.duration < source_video.duration:
-        source_video = source_video.subclip(source_video.start, source_video.start + args.duration)
+    raise Exception("Invalid source file")
 
-source_audio = source_video.audio
-source_fps = source_video.fps
-source_duration = source_video.duration
-print("Video Info:")
-print("Name:", driving_video_path)
-print("Dimensions:", 'x'.join([str(x) for x in source_video.size]))
-print("Start:", args.start or source_video.start)
-print("Duration:", source_duration)
-print("End:", (args.start or source_video.start) + source_duration)
-print("FPS:", source_fps)
-print()
-# Read Image
-if image_extension.lower() == 'webp':
-    source_image = np.array(webp.load_image(source_image_path, 'RGBA'))
-else:
-    source_image = imageio.imread(source_image_path)
 
-print("Image Info:")
-print("Name:", source_image_path)
-print("Dimensions:", 'x'.join([str(x) for x in source_image.shape[:2]]))
-print()
+for input_file in input_files:
+    source_image_path = input_file
+    driving_video_path = args.video
+    output_video_name, image_extension = basename(source_image_path).rsplit('.', 1)
+    output_video_name += '_' + args.image_resize + '_' + args.video_resize
+    if options['adapt_movement_scale']:
+        output_video_name += '_adaptive_scaling'
+    output_video_name += "_" + args.codec
+    output_video_name += ".mp4"
+    driving_video_name = basename(driving_video_path).rsplit('.', 1)[0]
+    output_video_folder = join(output_folder, driving_video_name)
+    try:
+        makedirs(output_video_folder)
+    except:
+        pass
+    output_video_path = join(output_video_folder, output_video_name)
 
-# Read and Resize image and video to 256x256
-if source_image.shape[:2] != [256, 256]:
-    print("Resizing image to 256x256 with ", end = '')
-    if args.image_resize == 'fill':
-        print("Mode: Fill")
-        width, height = source_image.shape[:2]
-        if width > height:
-            height = int(256*height / width)
-            width = 256
-            source_image = resize(source_image, (width, height))[..., :3]
-            remaining = 256-height
-            side_1 = int(remaining/2)
-            side_2 = int(remaining - side_1)
-            source_image = image_pad(source_image, [(0, 0), (side_1, side_2), (0, 0)], mode='constant', constant_values=(0, 0))
+    if not (generator or kp_detector):
+        print("Loading Model")
+        generator, kp_detector = load_checkpoints(**modes[args.mode])
+
+    print("Loading User Input")
+    print()
+
+    # Read Video and Extract Audio
+    source_video = VideoFileClip(driving_video_path)
+    # Remap timings
+    if args.start:
+        if args.end and args.end > args.start and args.end < source_video.duration:
+                source_video = source_video.subclip(args.start, args.end)
+        elif args.duration and args.duration < source_video.duration and args.duration + args.start < source_video.duration:
+                source_video = source_video.subclip(args.start, args.start + args.duration)            
         else:
-            width = int(256*width / height)
-            height = 256
-            source_image = resize(source_image, (width, height))[..., :3]
-            remaining = 256-width
-            side_1 = int(remaining/2)
-            side_2 = int(remaining - side_1)
-            source_image = image_pad(source_image, [(side_1, side_2), (0, 0), (0, 0)], mode='constant', constant_values=(0, 0))
-    elif args.image_resize == 'stretch':
-        print("Mode: Stretch")
-        source_image = resize(source_image, (256, 256))[..., :3]
-    elif args.image_resize == 'crop':
-        print("Mode: Crop")
-        width, height = source_image.shape[:2]
-        if width < height:
-            height = int(256*height / width)
-            width = 256
-            source_image = resize(source_image, (width, height))[..., :3]
-            x_center, y_center = 128, height//2
-            source_image = source_image[:, y_center-128:y_center+128, :]
-        else:
-            width = int(256*width / height)
-            height = 256
-            source_image = resize(source_image, (width, height))[..., :3]
-            x_center, y_center = width//2, 128
-            source_image = source_image[x_center-128:x_center+128, :, :]
+            if args.start < source_video.duration:
+                source_video = source_video.subclip(args.start)
+            else:
+                args.start = 0.00
     else:
-        raise NotImplementedError("Invalid Image Resize Mode")
+        if args.end and args.end < source_video.duration:
+            source_video = source_video.subclip(source_video.start, args.end)
+        elif args.duration and args.duration < source_video.duration:
+            source_video = source_video.subclip(source_video.start, source_video.start + args.duration)
 
-
-if source_video.size != [256, 256]:
-    print("Resizing Video to 256x256 with ", end = '')
-    if args.video_resize == 'fill':
-        print("Mode: Fill")
-        width, height = source_video.size
-        if width > height:
-            height = int(256*height / width)
-            width = 256
-            source_video = movie_resize(source_video, (width, height))
-            remaining = 256-height
-            side_1 = int(remaining/2)
-            side_2 = int(remaining - side_1)
-            source_video = movie_margin(source_video, top=side_1, bottom=side_2, color=(0, 0, 0))
-        else:
-            width = int(256*width / height)
-            height = 256
-            source_video = movie_resize(source_video, (width, height))
-            remaining = 256-width
-            side_1 = int(remaining/2)
-            side_2 = int(remaining - side_1)
-            source_video = movie_margin(source_video, left=side_1, right=side_2, color=(0, 0, 0))
-    elif args.video_resize == 'stretch':
-        print("Mode: Stretch")
-        # driving_video = [resize(frame, (256, 256))[..., :3] for frame in source_video.iter_frames()]
-        source_video = movie_resize(source_video, (256, 256))
-    elif args.video_resize == 'crop':
-        print("Mode: Crop")
-        width, height = source_video.size
-        if width < height:
-            height = int(256*height / width)
-            width = 256
-            source_video = movie_resize(source_video, (width, height))
-            x_center, y_center = 128, height//2
-        else:
-            width = int(256*width / height)
-            height = 256
-            source_video = movie_resize(source_video, (width, height))
-            x_center, y_center = width//2, 128
-        source_video = movie_crop(source_video, x_center=x_center, y_center=y_center, width=256, height=256)
+    source_audio = source_video.audio
+    source_fps = source_video.fps
+    source_duration = source_video.duration
+    print("Video Info:")
+    print("Name:", driving_video_path)
+    print("Dimensions:", 'x'.join([str(x) for x in source_video.size]))
+    print("Start:", args.start or source_video.start)
+    print("Duration:", source_duration)
+    print("End:", (args.start or source_video.start) + source_duration)
+    print("FPS:", source_fps)
+    print()
+    # Read Image
+    if image_extension.lower() == 'webp':
+        source_image = np.array(webp.load_image(source_image_path, 'RGBA'))
     else:
-        raise NotImplementedError("Invalid Video Resize Mode")
+        source_image = imageio.imread(source_image_path)
 
-driving_video = [(frame/255) for frame in source_video.iter_frames()]
-print()
+    print("Image Info:")
+    print("Name:", source_image_path)
+    print("Dimensions:", 'x'.join([str(x) for x in source_image.shape[:2]]))
+    print()
+
+    # Read and Resize image and video to 256x256
+    if source_image.shape[:2] != [256, 256]:
+        print("Resizing image to 256x256 with ", end = '')
+        if args.image_resize == 'fill':
+            print("Mode: Fill")
+            width, height = source_image.shape[:2]
+            if width > height:
+                height = int(256*height / width)
+                width = 256
+                source_image = resize(source_image, (width, height))[..., :3]
+                remaining = 256-height
+                side_1 = int(remaining/2)
+                side_2 = int(remaining - side_1)
+                source_image = image_pad(source_image, [(0, 0), (side_1, side_2), (0, 0)], mode='constant', constant_values=(0, 0))
+            else:
+                width = int(256*width / height)
+                height = 256
+                source_image = resize(source_image, (width, height))[..., :3]
+                remaining = 256-width
+                side_1 = int(remaining/2)
+                side_2 = int(remaining - side_1)
+                source_image = image_pad(source_image, [(side_1, side_2), (0, 0), (0, 0)], mode='constant', constant_values=(0, 0))
+        elif args.image_resize == 'stretch':
+            print("Mode: Stretch")
+            source_image = resize(source_image, (256, 256))[..., :3]
+        elif args.image_resize == 'crop':
+            print("Mode: Crop")
+            width, height = source_image.shape[:2]
+            if width < height:
+                height = int(256*height / width)
+                width = 256
+                source_image = resize(source_image, (width, height))[..., :3]
+                x_center, y_center = 128, height//2
+                source_image = source_image[:, y_center-128:y_center+128, :]
+            else:
+                width = int(256*width / height)
+                height = 256
+                source_image = resize(source_image, (width, height))[..., :3]
+                x_center, y_center = width//2, 128
+                source_image = source_image[x_center-128:x_center+128, :, :]
+        else:
+            raise NotImplementedError("Invalid Image Resize Mode")
 
 
-print("Generating Video")
-predictions = make_animation(source_image, driving_video, generator, kp_detector, **options)
-print()
+    if source_video.size != [256, 256]:
+        print("Resizing Video to 256x256 with ", end = '')
+        if args.video_resize == 'fill':
+            print("Mode: Fill")
+            width, height = source_video.size
+            if width > height:
+                height = int(256*height / width)
+                width = 256
+                source_video = movie_resize(source_video, (width, height))
+                remaining = 256-height
+                side_1 = int(remaining/2)
+                side_2 = int(remaining - side_1)
+                source_video = movie_margin(source_video, top=side_1, bottom=side_2, color=(0, 0, 0))
+            else:
+                width = int(256*width / height)
+                height = 256
+                source_video = movie_resize(source_video, (width, height))
+                remaining = 256-width
+                side_1 = int(remaining/2)
+                side_2 = int(remaining - side_1)
+                source_video = movie_margin(source_video, left=side_1, right=side_2, color=(0, 0, 0))
+        elif args.video_resize == 'stretch':
+            print("Mode: Stretch")
+            # driving_video = [resize(frame, (256, 256))[..., :3] for frame in source_video.iter_frames()]
+            source_video = movie_resize(source_video, (256, 256))
+        elif args.video_resize == 'crop':
+            print("Mode: Crop")
+            width, height = source_video.size
+            if width < height:
+                height = int(256*height / width)
+                width = 256
+                source_video = movie_resize(source_video, (width, height))
+                x_center, y_center = 128, height//2
+            else:
+                width = int(256*width / height)
+                height = 256
+                source_video = movie_resize(source_video, (width, height))
+                x_center, y_center = width//2, 128
+            source_video = movie_crop(source_video, x_center=x_center, y_center=y_center, width=256, height=256)
+        else:
+            raise NotImplementedError("Invalid Video Resize Mode")
+
+    driving_video = [(frame/255) for frame in source_video.iter_frames()]
+    print()
 
 
-def make_frame(t):
-        try:
-            x = predictions[int(len(predictions)/source_duration*t)]
-        except:
-            x = predictions[-1]
+    print("Generating Video")
+    predictions = make_animation(source_image, driving_video, generator, kp_detector, **options)
+    print()
 
-        return (x*255).astype(np.uint8)
-
-
-output_clip = VideoClip(make_frame, duration=source_duration)
-output_clip = output_clip.set_fps(source_fps)
-output_clip = output_clip.set_audio(source_audio)
+    output_clip = VideoClip(make_frame, duration=source_duration)
+    output_clip = output_clip.set_fps(source_fps)
+    output_clip = output_clip.set_audio(source_audio)
 
 
-print("Saving Video...")
-output_clip.write_videofile(output_video_path, logger=None, verbose=False, **codecs[args.codec])
+    print("Saving Video...")
+    output_clip.write_videofile(output_video_path, logger=None, verbose=False, **codecs[args.codec])
 
-print("Video saved to", output_video_path)
-print()
+    print("Video saved to", output_video_path)
+    print()
 
-if args.stack:
-    print("Saving Side by Side Video")
-    stack_clip = clips_array([[output_clip.margin(right=10), source_video]])
-    stack_path = output_video_path.rsplit('.', 1)[0] + '_stacked.mp4'
-    stack_clip.write_videofile(stack_path, logger=None, verbose=False, **codecs[args.codec])
-    print("Stacked Video saved to", stack_path)
-    stack_clip.close()
+    if args.stack:
+        print("Saving Side by Side Video")
+        stack_clip = clips_array([[output_clip.margin(right=10), source_video]])
+        stack_path = output_video_path.rsplit('.', 1)[0] + '_stacked.mp4'
+        stack_clip.write_videofile(stack_path, logger=None, verbose=False, **codecs[args.codec])
+        print("Stacked Video saved to", stack_path)
+        stack_clip.close()
 
-output_clip.close()
-source_video.close()
+    output_clip.close()
+    source_video.close()
