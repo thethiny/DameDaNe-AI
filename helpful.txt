@@ -1,0 +1,24 @@
+need moviepy
+need webp
+
+set_fps
+set_audio
+clip.audio.write_audiofile()
+without_audio
+to_RGB
+to_ImageClip
+to_images_sequence
+iter_frames()
+
+from moviepy.video.io.VideoFileClip import VideoFileClip
+clip1 = mpe.VideoFileClip("path/to/mp4")
+clip2 = mpe.VideoFileClip("path/to/mp4withaudio")
+audio = clip2.audio
+clip1 = clip1.set_audio(audio)
+clip1.write_videofile("path/to/out.mp4")
+
+
+
+Todo:
+Support Gif
+Add BATCH support
