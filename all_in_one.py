@@ -44,6 +44,7 @@ resize_group.add_argument("-ir", "--image-resize", help="Resize mode for resizin
     choices=["fill", "stretch", "crop"], type=str.lower)
 resize_group.add_argument("-vr", "--video-resize", help="Resize mode for resizing source video", default="stretch",
     choices=["fill", "stretch", "crop"], type=str.lower)
+resize_group.add_argument("-co", "--crop-output", action="store_true", help="Crop output video to original ration (only in fill mode)", default=False)
 
 time_group = parser.add_argument_group("Time Remap", "Arguments to select start, end, and video duration")
 time_group.add_argument('--start', help="Set Video Start", default=0.00, type=float)
@@ -259,7 +260,7 @@ for input_file in input_files:
 
     print("Image Info:")
     print("Name:", source_image_path)
-    print("Dimensions:", 'x'.join([str(x) for x in source_image.shape[:2]]))
+    print("Dimensions:", 'x'.join([str(x) for x in source_image.shape[:2]][::-1]))
     print()
 
     # Read and Resize image and video to 256x256
@@ -267,41 +268,42 @@ for input_file in input_files:
         print("Resizing image to 256x256 with ", end = '')
         if args.image_resize == 'fill':
             print("Mode: Fill")
-            width, height = source_image.shape[:2]
+            height, width = source_image.shape[:2]
             if width > height:
                 height = int(256*height / width)
                 width = 256
-                source_image = resize(source_image, (width, height))[..., :3]
+                source_image = resize(source_image, (height, width))[..., :3]
                 remaining = 256-height
                 side_1 = int(remaining/2)
                 side_2 = int(remaining - side_1)
-                source_image = image_pad(source_image, [(0, 0), (side_1, side_2), (0, 0)], mode='constant', constant_values=(0, 0))
+                source_image = image_pad(source_image, [(side_1, side_2), (0, 0), (0, 0)], mode='constant', constant_values=(0, 0))                
             else:
                 width = int(256*width / height)
                 height = 256
-                source_image = resize(source_image, (width, height))[..., :3]
+                source_image = resize(source_image, (height, width))[..., :3]
                 remaining = 256-width
                 side_1 = int(remaining/2)
                 side_2 = int(remaining - side_1)
-                source_image = image_pad(source_image, [(side_1, side_2), (0, 0), (0, 0)], mode='constant', constant_values=(0, 0))
+                source_image = image_pad(source_image, [(0, 0), (side_1, side_2), (0, 0)], mode='constant', constant_values=(0, 0))
+            unfill_width, unfill_height = width, height
         elif args.image_resize == 'stretch':
             print("Mode: Stretch")
             source_image = resize(source_image, (256, 256))[..., :3]
         elif args.image_resize == 'crop':
             print("Mode: Crop")
-            width, height = source_image.shape[:2]
+            height, width = source_image.shape[:2]
             if width < height:
                 height = int(256*height / width)
                 width = 256
-                source_image = resize(source_image, (width, height))[..., :3]
+                source_image = resize(source_image, (height, width))[..., :3]
                 x_center, y_center = 128, height//2
-                source_image = source_image[:, y_center-128:y_center+128, :]
+                source_image = source_image[y_center-128:y_center+128, :, :]
             else:
                 width = int(256*width / height)
                 height = 256
-                source_image = resize(source_image, (width, height))[..., :3]
+                source_image = resize(source_image, (height, width))[..., :3]
                 x_center, y_center = width//2, 128
-                source_image = source_image[x_center-128:x_center+128, :, :]
+                source_image = source_image[:, x_center-128:x_center+128, :]
         else:
             raise NotImplementedError("Invalid Image Resize Mode")
 
@@ -359,6 +361,10 @@ for input_file in input_files:
     output_clip = VideoClip(make_frame, duration=source_duration)
     output_clip = output_clip.set_fps(source_fps)
     output_clip = output_clip.set_audio(source_audio)
+
+    if args.image_resize == 'fill' and args.crop_output:
+        print(f"Cropping output video to {unfill_width}x{unfill_height}")
+        output_clip = movie_crop(output_clip, x_center=256//2, y_center=256//2, width=unfill_width, height=unfill_height)
 
 
     print("Saving Video...")
