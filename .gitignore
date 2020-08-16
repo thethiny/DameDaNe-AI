@@ -7,3 +7,4 @@ output
 user_data
 checkpoints
 *.exe
+build\*
