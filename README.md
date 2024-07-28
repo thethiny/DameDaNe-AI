@@ -1,6 +1,10 @@
+<b>!!! Check out our new [paper](https://arxiv.org/pdf/2104.11280.pdf) and [framework](https://github.com/snap-research/articulated-animation) improved for articulated objects</b>
+
 # First Order Motion Model for Image Animation
 
 This repository contains the source code for the paper [First Order Motion Model for Image Animation](https://papers.nips.cc/paper/8935-first-order-motion-model-for-image-animation) by Aliaksandr Siarohin, [Stéphane Lathuilière](http://stelat.eu), [Sergey Tulyakov](http://stulyakov.com), [Elisa Ricci](http://elisaricci.eu/) and [Nicu Sebe](http://disi.unitn.it/~sebe/). 
+
+[Hugging Face Spaces](https://huggingface.co/spaces/abhishek/first-order-motion-model)
 
 ## Example animations
 
@@ -73,7 +77,12 @@ docker run -it --rm --gpus all \
 ```
 
 ### Colab Demo 
-We prepare a special demo for the google-colab, see: ```demo-colab.ipynb```.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AliaksandrSiarohin/first-order-model/blob/master/demo.ipynb) [![Open in Kaggle](https://kaggle.com/static/images/open-in-kaggle.svg)](https://kaggle.com/kernels/welcome?src=https://github.com/AliaksandrSiarohin/first-order-model/blob/master/demo.ipynb)
+
+@graphemecluster prepared a GUI demo for the Google Colab. It also works in Kaggle. For the source code, see [```demo.ipynb```](https://github.com/AliaksandrSiarohin/first-order-model/blob/master/demo.ipynb).
+
+For the old demo, see [```old_demo.ipynb```](https://github.com/AliaksandrSiarohin/first-order-model/blob/master/old_demo.ipynb).
 
 ### Face-swap
 It is possible to modify the method to perform face-swap using supervised segmentation masks.
@@ -82,8 +91,6 @@ For both unsupervised and supervised video editing, such as face-swap, please re
 
 
 ### Training
-
-**Note: It is important to use pytorch==1.0.0 for training. Higher versions of pytorch have strange bilinear warping behavior, because of it model diverge.**
 
 To train a model on specific dataset run:
 ```
@@ -137,7 +144,7 @@ that the object in the first frame of the video and in the source image have the
 
 ### Datasets
 
-1) **Bair**. This dataset can be directly [downloaded](https://yadi.sk/d/66vNK0EwJcVkPg).
+1) **Bair**. This dataset can be directly [downloaded](https://yadi.sk/d/Rr-fjn-PdmmqeA).
 
 2) **Mgif**. This dataset can be directly [downloaded](https://yadi.sk/d/5VdqLARizmnj3Q).
 

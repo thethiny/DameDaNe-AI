@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import imageio
 
 import os
-from skimage.draw import circle
+from skimage.draw import disk
 
 import matplotlib.pyplot as plt
 import collections
@@ -50,7 +50,11 @@ class Logger:
     @staticmethod
     def load_cpk(checkpoint_path, generator=None, discriminator=None, kp_detector=None,
                  optimizer_generator=None, optimizer_discriminator=None, optimizer_kp_detector=None):
-        checkpoint = torch.load(checkpoint_path)
+        if torch.cuda.is_available():
+            map_location = None
+        else:
+            map_location = 'cpu'
+        checkpoint = torch.load(checkpoint_path, map_location)
         if generator is not None:
             generator.load_state_dict(checkpoint['generator'])
         if kp_detector is not None:
@@ -107,7 +111,7 @@ class Visualizer:
         kp_array = spatial_size * (kp_array + 1) / 2
         num_kp = kp_array.shape[0]
         for kp_ind, kp in enumerate(kp_array):
-            rr, cc = circle(kp[1], kp[0], self.kp_size, shape=image.shape[:2])
+            rr, cc = disk(kp[1], kp[0], self.kp_size, shape=image.shape[:2])
             image[rr, cc] = np.array(self.colormap(kp_ind / num_kp))[:3]
         return image
 
@@ -118,7 +122,6 @@ class Visualizer:
     def create_image_column(self, images):
         if self.draw_border:
             images = np.copy(images)
-            images[:, :, [0, -1]] = (1, 1, 1)
             images[:, :, [0, -1]] = (1, 1, 1)
         return np.concatenate(list(images), axis=0)
 
