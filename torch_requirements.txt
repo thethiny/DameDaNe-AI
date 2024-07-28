@@ -1,0 +1,4 @@
+-f https://download.pytorch.org/whl/cu116
+torch==1.12.1
+torchaudio
+torchvision
